@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stok Bahan Ajar - SITTA UT</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <span class="brand">📚 SITTA · Bahan Ajar UT</span>
+    <nav>
+      <a href="index.html">Beranda</a>
+      <a href="stok.html" class="active">Stok Bahan Ajar</a>
+      <a href="tracking.html">Tracking DO</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h1>Stok Bahan Ajar</h1>
+    <p class="subtitle">Daftar stok bahan ajar seluruh UT-Daerah</p>
+
+    <div class="stat-row">
+      <div class="stat">
+        <span class="stat-label">Total judul</span>
+        <strong>{{ stok.length }}</strong>
+      </div>
+      <div class="stat warn">
+        <span class="stat-label">Perlu re-order</span>
+        <strong>{{ reorderCount }}</strong>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Ditampilkan</span>
+        <strong>{{ filteredStok.length }}</strong>
+      </div>
+    </div>
+
+    <div class="alert" v-if="reorderCount > 0">
+      ⚠️ Ada <strong>{{ reorderCount }}</strong> bahan ajar yang stoknya di bawah safety stock atau habis.
+      <a href="#" @click.prevent="filter.hanyaReorder = true">Tampilkan daftar re-order</a>
+    </div>
+
+    <!-- FILTER & SORT -->
+    <section class="card toolbar">
+      <div class="field">
+        <label for="f-upbjj">UT-Daerah</label>
+        <select id="f-upbjj" v-model="filter.upbjj">
+          <option value="all">Semua UT-Daerah</option>
+          <option v-for="u in upbjjList" :key="u" :value="u" v-text="u"></option>
+        </select>
+      </div>
+
+      <!-- Dependent option: muncul hanya setelah UT-Daerah dipilih -->
+      <div class="field" v-if="filter.upbjj !== 'all'">
+        <label for="f-kategori">Kategori MK</label>
+        <select id="f-kategori" v-model="filter.kategori">
+          <option value="all">Semua Kategori</option>
+          <option v-for="k in kategoriList" :key="k" :value="k" v-text="k"></option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-sort">Urutkan berdasarkan</label>
+        <select id="f-sort" v-model="sort.by">
+          <option value="judul">Judul</option>
+          <option value="qty">Stok</option>
+          <option value="harga">Harga</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="f-order">Urutan</label>
+        <select id="f-order" v-model="sort.order">
+          <option value="asc">Naik (A→Z / kecil→besar)</option>
+          <option value="desc">Turun (Z→A / besar→kecil)</option>
+        </select>
+      </div>
+
+      <label class="checkbox">
+        <input type="checkbox" v-model="filter.hanyaReorder">
+        Hanya perlu re-order (stok &lt; safety atau 0)
+      </label>
+
+      <div class="toolbar-actions">
+        <button type="button" class="btn btn-ghost" @click="resetFilter">Reset Filter</button>
+        <button type="button" class="btn btn-primary" @click="showForm = !showForm"
+                v-text="showForm ? 'Tutup Form' : '+ Tambah Bahan Ajar'"></button>
+      </div>
+    </section>
+
+    <!-- FORM TAMBAH DATA -->
+    <section class="card" v-show="showForm">
+      <h2>Tambah Bahan Ajar Baru</h2>
+      <form @submit.prevent="tambahData" novalidate>
+        <div class="form-grid">
+          <label>
+            Kode MK
+            <input v-model="form.kode" placeholder="contoh: EKMA4117" maxlength="8">
+            <small class="err" v-if="formSubmitted && formErrors.kode" v-text="formErrors.kode"></small>
+          </label>
+
+          <label>
+            Judul
+            <input v-model="form.judul" placeholder="Nama mata kuliah">
+            <small class="err" v-if="formSubmitted && formErrors.judul" v-text="formErrors.judul"></small>
+          </label>
+
+          <label>
+            Kategori
+            <select v-model="form.kategori">
+              <option value="" disabled>-- Pilih kategori --</option>
+              <option v-for="k in kategoriList" :key="k" :value="k" v-text="k"></option>
+            </select>
+            <small class="err" v-if="formSubmitted && formErrors.kategori" v-text="formErrors.kategori"></small>
+          </label>
+
+          <label>
+            UT-Daerah
+            <select v-model="form.upbjj">
+              <option value="" disabled>-- Pilih UT-Daerah --</option>
+              <option v-for="u in upbjjList" :key="u" :value="u" v-text="u"></option>
+            </select>
+            <small class="err" v-if="formSubmitted && formErrors.upbjj" v-text="formErrors.upbjj"></small>
+          </label>
+
+          <label>
+            Lokasi Rak
+            <input v-model="form.lokasiRak" placeholder="contoh: R1-A3">
+            <small class="err" v-if="formSubmitted && formErrors.lokasiRak" v-text="formErrors.lokasiRak"></small>
+          </label>
+
+          <label>
+            Harga (Rp)
+            <input type="number" min="1" v-model.number="form.harga" placeholder="60000">
+            <small class="err" v-if="formSubmitted && formErrors.harga" v-text="formErrors.harga"></small>
+          </label>
+
+          <label>
+            Jumlah Stok
+            <input type="number" min="0" v-model.number="form.qty">
+            <small class="err" v-if="formSubmitted && formErrors.qty" v-text="formErrors.qty"></small>
+          </label>
+
+          <label>
+            Safety Stock
+            <input type="number" min="0" v-model.number="form.safety">
+            <small class="err" v-if="formSubmitted && formErrors.safety" v-text="formErrors.safety"></small>
+          </label>
+
+          <label style="grid-column: 1 / -1;">
+            Catatan (opsional)
+            <textarea v-model="form.catatan" placeholder="Contoh: Edisi 2026, cetak ulang"></textarea>
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" @click="resetForm">Kosongkan</button>
+          <button type="submit" class="btn btn-success">Simpan Bahan Ajar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- TABEL STOK -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Kode / Mata Kuliah</th>
+            <th>Kategori</th>
+            <th>UT-Daerah</th>
+            <th>Lokasi Rak</th>
+            <th class="num">Stok</th>
+            <th class="num">Safety</th>
+            <th class="num">Harga</th>
+            <th>Status</th>
+            <th>Catatan</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in filteredStok" :key="item.kode"
+              :class="{ 'row-kosong': item.qty === 0, 'row-menipis': item.qty > 0 && item.qty < item.safety }">
+            <td>
+              <strong v-text="item.kode"></strong><br>
+              <span v-text="item.judul"></span>
+            </td>
+            <td v-text="item.kategori"></td>
+            <td v-text="item.upbjj"></td>
+
+            <td>
+              <input v-if="isEditing(item)" v-model="editForm.lokasiRak" class="input-sm input-wide">
+              <span v-else v-text="item.lokasiRak"></span>
+            </td>
+
+            <td class="num">
+              <input v-if="isEditing(item)" type="number" min="0" v-model.number="editForm.qty" class="input-sm">
+              <span v-else v-text="item.qty"></span>
+            </td>
+
+            <td class="num">
+              <input v-if="isEditing(item)" type="number" min="0" v-model.number="editForm.safety" class="input-sm">
+              <span v-else v-text="item.safety"></span>
+            </td>
+
+            <td class="num">
+              <input v-if="isEditing(item)" type="number" min="1" v-model.number="editForm.harga" class="input-sm input-wide">
+              <span v-else v-text="formatRupiah(item.harga)"></span>
+            </td>
+
+            <!-- Status: kosong (merah) / menipis (oranye) / aman (hijau) -->
+            <td>
+              <span v-if="item.qty === 0" class="badge badge-merah">⛔ Kosong</span>
+              <span v-else-if="item.qty < item.safety" class="badge badge-oranye">⚠️ Menipis</span>
+              <span v-else class="badge badge-hijau">✅ Aman</span>
+            </td>
+
+            <td>
+              <input v-if="isEditing(item)" v-model="editForm.catatan" class="input-wide">
+              <span v-else v-html="item.catatanHTML"></span>
+            </td>
+
+            <td>
+              <div class="row-actions" v-if="isEditing(item)">
+                <button class="btn btn-success btn-sm" :disabled="!!editErrorMsg"
+                        :title="editErrorMsg" @click="saveEdit(item)">Simpan</button>
+                <button class="btn btn-danger btn-sm" @click="cancelEdit">Batal</button>
+              </div>
+              <button v-else class="btn btn-ghost btn-sm" @click="startEdit(item)">✏️ Edit</button>
+            </td>
+          </tr>
+
+          <tr v-if="filteredStok.length === 0">
+            <td colspan="10" class="empty">Tidak ada data yang sesuai filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="subtitle" style="margin-top: 12px;">
+      Keterangan warna baris: <span class="badge badge-merah">Kosong</span>
+      <span class="badge badge-oranye">Menipis</span> <span class="badge badge-hijau">Aman</span>
+    </p>
+
+    <div class="toast" v-if="notif" v-text="notif"></div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.js"></script>
+<script src="js/dataBahanAjar.js"></script>
+<script src="js/stok-app.js"></script>
+</body>
+</html>
